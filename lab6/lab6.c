@@ -30,8 +30,6 @@ static struct device* crypto_device = NULL;
 #define CRYPTO_TRANSPOSITION_ENCRYPT _IOW(CRYPTO_IOC_MAGIC, 5, int)
 #define CRYPTO_TRANSPOSITION_DECRYPT _IOW(CRYPTO_IOC_MAGIC, 6, int)
 
-// ===== Cipher Implementations (FIXED VERSION) =====
-
 static void shift_encrypt(char* text, int shift) {
     shift %= 26;
     for (int i = 0; text[i]; i++) {
@@ -46,22 +44,20 @@ static void shift_decrypt(char* text, int shift) {
     shift_encrypt(text, 26 - (shift % 26));
 }
 
-// FIXED: Substitution key without duplicates
-static const char sub_key[27] = "zyxwvutsrqponmlkjihgfedcba"; // Simple reverse alphabet
+static const char sub_key[27] = "zyxwvutsrqponmlkjihgfedcba"; 
 
 static void substitution_encrypt(char* text) {
     for (int i = 0; text[i]; i++) {
         if (text[i] >= 'a' && text[i] <= 'z')
             text[i] = sub_key[text[i] - 'a'];
         else if (text[i] >= 'A' && text[i] <= 'Z')
-            text[i] = sub_key[text[i] - 'A'] - 32; // Convert to uppercase
+            text[i] = sub_key[text[i] - 'A'] - 32; 
     }
 }
 
 static void substitution_decrypt(char* text) {
     for (int i = 0; text[i]; i++) {
         if (text[i] >= 'a' && text[i] <= 'z') {
-            // Find position in sub_key and convert back to original
             for (int j = 0; j < 26; j++) {
                 if (sub_key[j] == text[i]) {
                     text[i] = 'a' + j;
@@ -69,7 +65,6 @@ static void substitution_decrypt(char* text) {
                 }
             }
         } else if (text[i] >= 'A' && text[i] <= 'Z') {
-            // For uppercase, convert to lowercase, find, then convert back
             char lower = text[i] + 32;
             for (int j = 0; j < 26; j++) {
                 if (sub_key[j] == lower) {
@@ -81,7 +76,6 @@ static void substitution_decrypt(char* text) {
     }
 }
 
-// FIXED: Transposition cipher with correct encrypt/decrypt logic
 static void transposition_encrypt(char* text, int key) {
     int len = strlen(text);
     if (len == 0 || key <= 1) return;
@@ -91,7 +85,6 @@ static void transposition_encrypt(char* text, int key) {
     if (!temp) return;
 
     int idx = 0;
-    // Read column by column (encrypt)
     for (int j = 0; j < key; j++) {
         for (int i = 0; i < rows; i++) {
             int pos = i * key + j;
@@ -114,12 +107,10 @@ static void transposition_decrypt(char* text, int key) {
     char *temp = kmalloc(len + 1, GFP_KERNEL);
     if (!temp) return;
 
-    // Calculate how many characters in each column
-    int full_columns = len % key;  // Number of columns that have 'rows' characters
+    int full_columns = len % key; 
     if (full_columns == 0) full_columns = key;
     
     int idx = 0;
-    // Write column by column (decrypt - reverse of encrypt)
     for (int j = 0; j < key; j++) {
         int col_size = (j < full_columns) ? rows : rows - 1;
         for (int i = 0; i < col_size; i++) {
@@ -134,7 +125,6 @@ static void transposition_decrypt(char* text, int key) {
     strscpy(text, temp, len + 1);
     kfree(temp);
 }
-// ===== File Operations =====
 
 static int dev_open(struct inode *inodep, struct file *filep) {
     printk(KERN_INFO "Crypto: Device opened\n");
@@ -208,12 +198,11 @@ static long dev_ioctl(struct file *filep, unsigned int cmd, unsigned long arg) {
             return -EINVAL;
     }
 
-    filep->f_pos = 0;   // reset offset đọc về đầu để read lấy dữ liệu mã hóa
+    filep->f_pos = 0;   
 
     return 0;
 }
 
-// ===== Module Init/Exit =====
 
 static struct file_operations fops = {
     .open = dev_open,

@@ -7,7 +7,6 @@
 
 #define DEVICE "/dev/lab6"
 
-// Khớp với driver
 #define CRYPTO_SHIFT_ENCRYPT          _IOW('c', 1, int)
 #define CRYPTO_SHIFT_DECRYPT          _IOW('c', 2, int)
 #define CRYPTO_SUBSTITUTION_ENCRYPT  _IO('c', 3)
@@ -43,7 +42,7 @@ int main() {
         printf("Lựa chọn: ");
         if (scanf("%d", &choice) != 1) {
             printf("Vui lòng nhập số hợp lệ!\n");
-            while(getchar() != '\n'); // Xóa buffer nhập sai
+            while(getchar() != '\n'); 
             continue;
         }
         getchar(); // bỏ \n sau scanf
@@ -60,7 +59,7 @@ int main() {
                     perror("Lỗi ghi vào thiết bị");
                     break;
                 }
-                lseek(fd, 0, SEEK_SET);  // Reset con trỏ đọc
+                lseek(fd, 0, SEEK_SET);  
                 break;
 
             case 2:
