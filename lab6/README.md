@@ -6,7 +6,7 @@ echo "=== BIÊN DỊCH VÀ CÀI ĐẶT CRYPTO DRIVER ==="
 make
 
 # Cài đặt driver
-sudo insmod crypto_driver.ko
+sudo insmod lab6.ko
 
 # Xem log:
 sudo dmesg | tail -n 10

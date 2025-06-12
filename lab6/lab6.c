@@ -6,6 +6,7 @@
 #include <linux/uaccess.h>
 #include <linux/string.h>
 #include <linux/slab.h>  // for kmalloc and kfree
+#include <linux/ctype.h> 
 
 #define DEVICE_NAME "lab6"
 #define CLASS_NAME "crypto"
@@ -25,8 +26,8 @@ static struct device* crypto_device = NULL;
 #define CRYPTO_IOC_MAGIC 'c'
 #define CRYPTO_SHIFT_ENCRYPT         _IOW(CRYPTO_IOC_MAGIC, 1, int)
 #define CRYPTO_SHIFT_DECRYPT         _IOW(CRYPTO_IOC_MAGIC, 2, int)
-#define CRYPTO_SUBSTITUTION_ENCRYPT _IO(CRYPTO_IOC_MAGIC, 3)
-#define CRYPTO_SUBSTITUTION_DECRYPT _IO(CRYPTO_IOC_MAGIC, 4)
+#define CRYPTO_SUBSTITUTION_ENCRYPT  _IOW(CRYPTO_IOC_MAGIC, 3, char[26])
+#define CRYPTO_SUBSTITUTION_DECRYPT  _IOW(CRYPTO_IOC_MAGIC, 4, char[26])
 #define CRYPTO_TRANSPOSITION_ENCRYPT _IOW(CRYPTO_IOC_MAGIC, 5, int)
 #define CRYPTO_TRANSPOSITION_DECRYPT _IOW(CRYPTO_IOC_MAGIC, 6, int)
 
@@ -43,31 +44,30 @@ static void shift_encrypt(char* text, int shift) {
 static void shift_decrypt(char* text, int shift) {
     shift_encrypt(text, 26 - (shift % 26));
 }
-
-static const char sub_key[27] = "zyxwvutsrqponmlkjihgfedcba"; 
-
-static void substitution_encrypt(char* text) {
+static void substitution_encrypt(char* text, const char* key) {
     for (int i = 0; text[i]; i++) {
-        if (text[i] >= 'a' && text[i] <= 'z')
-            text[i] = sub_key[text[i] - 'a'];
-        else if (text[i] >= 'A' && text[i] <= 'Z')
-            text[i] = sub_key[text[i] - 'A'] - 32; 
+        char c = text[i];
+        if (islower(c)) {
+            text[i] = tolower(key[c - 'a']);
+        } else if (isupper(c)) {
+            text[i] = toupper(key[c - 'A']);
+        }
     }
 }
 
-static void substitution_decrypt(char* text) {
+static void substitution_decrypt(char* text, const char* key) {
     for (int i = 0; text[i]; i++) {
-        if (text[i] >= 'a' && text[i] <= 'z') {
+        char c = text[i];
+        if (islower(c)) {
             for (int j = 0; j < 26; j++) {
-                if (sub_key[j] == text[i]) {
+                if (tolower(key[j]) == c) {
                     text[i] = 'a' + j;
                     break;
                 }
             }
-        } else if (text[i] >= 'A' && text[i] <= 'Z') {
-            char lower = text[i] + 32;
+        } else if (isupper(c)) {
             for (int j = 0; j < 26; j++) {
-                if (sub_key[j] == lower) {
+                if (toupper(key[j]) == c) {
                     text[i] = 'A' + j;
                     break;
                 }
@@ -181,11 +181,16 @@ static long dev_ioctl(struct file *filep, unsigned int cmd, unsigned long arg) {
             shift_decrypt(encrypted, key);
             break;
         case CRYPTO_SUBSTITUTION_ENCRYPT:
-            substitution_encrypt(encrypted);
-            break;
+            char user_key[26];
+            if (copy_from_user(user_key, (char __user *)arg, 26))
+                    return -EFAULT;
+                substitution_encrypt(encrypted, user_key);            
+                break;            
         case CRYPTO_SUBSTITUTION_DECRYPT:
-            substitution_decrypt(encrypted);
-            break;
+            if (copy_from_user(user_key, (char __user *)arg, 26))
+            return -EFAULT;
+            substitution_decrypt(encrypted, user_key);
+            break;      
         case CRYPTO_TRANSPOSITION_ENCRYPT:
             if (copy_from_user(&key, (int *)arg, sizeof(int))) return -EFAULT;
             transposition_encrypt(encrypted, key);
