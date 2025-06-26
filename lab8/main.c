@@ -1,116 +1,177 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <unistd.h>
 
+#define DEVICE "/dev/cryptdev"
 #define IOCTL_SET_ALGO     _IOW('k', 1, int)
-#define IOCTL_SET_KEY      _IOW('k', 2, char*)
-#define IOCTL_ENCRYPT      _IO('k', 3)
-#define IOCTL_DECRYPT      _IO('k', 4)
+#define IOCTL_SET_KEY      _IOW('k', 2, struct key_data)
+#define IOCTL_ENCRYPT      _IOR('k', 3, int)
+#define IOCTL_DECRYPT      _IOR('k', 4, int)
 
-#define BUF_SIZE 1024
+enum {
+    ALGO_DES = 0,
+    ALGO_AES
+};
 
-// 👉 In dữ liệu hex cho dễ xem
-void print_hex(const char* label, const char *data, int len) {
-    printf("%s:", label);
-    for (int i = 0; i < len; i++) {
-        printf(" %02x", (unsigned char)data[i]);
-    }
+struct key_data {
+    char key[32];
+    int keylen;
+};
+
+char buffer[1024];
+int fd;
+
+void flush_stdin() {
+    int ch;
+    while ((ch = getchar()) != '\n' && ch != EOF);
+}
+
+void print_hex(const char *data, int len) {
+    for (int i = 0; i < len; i++)
+        printf("%02x ", (unsigned char)data[i]);
     printf("\n");
 }
 
-int main() {
-    int fd;
-    char input[BUF_SIZE], key[32], buffer[BUF_SIZE];
-    int choice;
-    int buf_len;
+struct key_data get_key(int keylen) {
+    struct key_data kd;
+    kd.keylen = keylen;
+    memset(kd.key, 0, sizeof(kd.key));
+    printf("Nhập khóa (%d bytes): ", keylen);
+    fgets(kd.key, sizeof(kd.key), stdin);
+    size_t len = strlen(kd.key);
+    if (len > 0 && kd.key[len - 1] == '\n')
+        kd.key[len - 1] = '\0';
+    else
+        flush_stdin();
+    return kd;
+}
 
-    fd = open("/dev/cryptdev", O_RDWR);
+void menu() {
+    puts("\n=== MENU ===");
+    puts("1. Nhập vào 1 xâu");
+    puts("2. Mã hoá dùng DES");
+    puts("3. Mã hoá dùng AES");
+    puts("4. Giải mã dùng DES");
+    puts("5. Giải mã dùng AES");
+    puts("6. Kết thúc");
+    printf("Lựa chọn: ");
+}
+
+int main() {
+    int choice, keylen;
+    struct key_data kd;
+    ssize_t len;
+
+    fd = open(DEVICE, O_RDWR);
     if (fd < 0) {
-        perror("Open device");
+        perror("Không thể mở thiết bị");
         return 1;
     }
 
     while (1) {
-        printf("\n=== MENU ===\n");
-        printf("1. Nhập vào 1 xâu\n");
-        printf("2. Mã hoá và lưu xâu mã dùng mã DES (khóa 8 byte)\n");
-        printf("3. Mã hoá và lưu xâu mã dùng mã AES (khóa 16, 24 hoặc 32 byte)\n");
-        printf("4. Đọc và giải mã xâu mã dùng mã DES (khóa 8 byte)\n");
-        printf("5. Đọc và giải mã xâu mã dùng mã AES (khóa 16, 24 hoặc 32 byte)\n");
-        printf("6. Kết thúc\n");
-        printf("Lựa chọn: ");
-        scanf("%d", &choice);
-        getchar();  // bỏ '\n'
+        menu();
+        if (scanf("%d", &choice) != 1) {
+            flush_stdin();
+            printf("Lỗi nhập.\n");
+            continue;
+        }
+        flush_stdin();
 
         switch (choice) {
-            case 1:
-                printf("Nhập xâu: ");
-                fgets(input, sizeof(input), stdin);
-                input[strcspn(input, "\n")] = 0;  // bỏ '\n'
-                write(fd, input, strlen(input));
-                break;
+        case 1:
+            printf("Nhập xâu: ");
+            fgets(buffer, sizeof(buffer), stdin);
+            size_t slen = strlen(buffer);
+            if (buffer[slen - 1] == '\n') buffer[slen - 1] = '\0';
+            write(fd, buffer, strlen(buffer));
+            printf("Đã ghi xâu: \"%s\"\n", buffer);
+            break;
 
-            case 2:
-            case 3: {
-                printf("Nhập khoá (%s): ", choice == 2 ? "8 byte" : "16, 24 hoặc 32 byte");
-                fgets(key, sizeof(key), stdin);
-                key[strcspn(key, "\n")] = 0;
-                int key_len = strlen(key);
-                if ((choice == 2 && key_len != 8) ||
-                    (choice == 3 && (key_len != 16 && key_len != 24 && key_len != 32))) {
-                    printf("❌ Độ dài khóa không hợp lệ!\n");
-                    break;
-                }
+        case 2: // Encrypt DES
+            ioctl(fd, IOCTL_SET_ALGO, &((int){ALGO_DES}));
+            kd = get_key(8);
+            ioctl(fd, IOCTL_SET_KEY, &kd);
+            ioctl(fd, IOCTL_ENCRYPT, 0);
+            // lseek(fd, 0, SEEK_SET);
+            // len = read(fd, buffer, sizeof(buffer));
+            // printf("Xâu mã hoá (DES - hex): ");
+            // print_hex(buffer, len);
+            break;
 
-                ioctl(fd, IOCTL_SET_ALGO, choice == 2 ? 0 : 1);
-                ioctl(fd, IOCTL_SET_KEY, key);
-                ioctl(fd, IOCTL_ENCRYPT);
-
-                // buf_len = read(fd, buffer, BUF_SIZE);
-                // if (buf_len > 0) {
-                //     print_hex("🔒 Chuỗi đã mã hoá (hex)", buffer, buf_len);
-                // } else {
-                //     printf("⚠️ Không đọc được dữ liệu mã hoá.\n");
-                // }
+        case 3: // Encrypt AES
+            ioctl(fd, IOCTL_SET_ALGO, &((int){ALGO_AES}));
+            printf("Chọn độ dài khóa AES (16, 24, 32): ");
+            if (scanf("%d", &keylen) != 1) {
+                flush_stdin();
+                printf("Lỗi nhập độ dài khóa.\n");
                 break;
             }
-
-            case 4:
-            case 5: {
-                ioctl(fd, IOCTL_SET_ALGO, choice == 4 ? 0 : 1);
-                printf("Nhập khoá (%s): ", choice == 4 ? "8 byte" : "16, 24 hoặc 32 byte");
-                fgets(key, sizeof(key), stdin);
-                key[strcspn(key, "\n")] = 0;
-
-                int key_len = strlen(key);
-                if ((choice == 4 && key_len != 8) ||
-                    (choice == 5 && (key_len != 16 && key_len != 24 && key_len != 32))) {
-                    printf("❌ Độ dài khóa không hợp lệ!\n");
-                    break;
-                }
-
-                ioctl(fd, IOCTL_SET_KEY, key);
-                if (ioctl(fd, IOCTL_DECRYPT) == 0) {
-                    buf_len = read(fd, buffer, BUF_SIZE);
-                    if (buf_len > 0) {
-                        buffer[buf_len] = '\0';  // đảm bảo null-terminate
-                        printf("✅ Chuỗi đã giải mã: %s\n", buffer);
-                    } else {
-                        printf("⚠️ Không đọc được dữ liệu giải mã.\n");
-                    }
-                } else {
-                    printf("❌ Giải mã thất bại. Có thể sai khóa hoặc thuật toán.\n");
-                }
+            flush_stdin();
+            if (keylen != 16 && keylen != 24 && keylen != 32) {
+                printf("Độ dài không hợp lệ.\n");
                 break;
             }
+            kd = get_key(keylen);
+            ioctl(fd, IOCTL_SET_KEY, &kd);
+            ioctl(fd, IOCTL_ENCRYPT, 0);
+            // lseek(fd, 0, SEEK_SET);
+            // len = read(fd, buffer, sizeof(buffer));
+            // printf("Xâu mã hoá (AES - hex): ");
+            // print_hex(buffer, len);
+            break;
 
-            case 6:
-                close(fd);
-                return 0;
+        case 4: // Decrypt DES
+            ioctl(fd, IOCTL_SET_ALGO, &((int){ALGO_DES}));
+            kd = get_key(8);
+            ioctl(fd, IOCTL_SET_KEY, &kd);
+            if (ioctl(fd, IOCTL_DECRYPT, 0) != 0) {
+                printf("Giải mã thất bại (DES).\n");
+                break;
+            }
+            lseek(fd, 0, SEEK_SET);
+            len = read(fd, buffer, sizeof(buffer) - 1);
+            if (len > 0) {
+                buffer[len] = '\0';
+                printf("Xâu giải mã (DES): %s\n", buffer);
+            }
+            break;
+
+        case 5: // Decrypt AES
+            ioctl(fd, IOCTL_SET_ALGO, &((int){ALGO_AES}));
+            printf("Chọn độ dài khóa AES (16, 24, 32): ");
+            if (scanf("%d", &keylen) != 1) {
+                flush_stdin();
+                printf("Lỗi nhập.\n");
+                break;
+            }
+            flush_stdin();
+            if (keylen != 16 && keylen != 24 && keylen != 32) {
+                printf("Độ dài không hợp lệ.\n");
+                break;
+            }
+            kd = get_key(keylen);
+            ioctl(fd, IOCTL_SET_KEY, &kd);
+            if (ioctl(fd, IOCTL_DECRYPT, 0) != 0) {
+                printf("Giải mã thất bại (AES).\n");
+                break;
+            }
+            lseek(fd, 0, SEEK_SET);
+            len = read(fd, buffer, sizeof(buffer) - 1);
+            if (len > 0) {
+                buffer[len] = '\0';
+                printf("Xâu giải mã (AES): %s\n", buffer);
+            }
+            break;
+
+        case 6:
+            close(fd);
+            return 0;
+
+        default:
+            printf("Lựa chọn không hợp lệ.\n");
         }
     }
-
-    return 0;
 }

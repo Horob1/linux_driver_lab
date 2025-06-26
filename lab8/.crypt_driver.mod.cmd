@@ -1,1 +1,0 @@
-savedcmd_/home/vancongng/Desktop/linux_driver_lab/lab8/crypt_driver.mod := printf '%s\n'   crypt_driver.o | awk '!x[$$0]++ { print("/home/vancongng/Desktop/linux_driver_lab/lab8/"$$0) }' > /home/vancongng/Desktop/linux_driver_lab/lab8/crypt_driver.mod

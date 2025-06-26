@@ -1,1 +1,0 @@
-savedcmd_/home/vancongng/Desktop/linux_driver_lab/lab8/crypt_driver.ko := ld -r -m elf_x86_64 -z noexecstack --build-id=sha1  -T scripts/module.lds -o /home/vancongng/Desktop/linux_driver_lab/lab8/crypt_driver.ko /home/vancongng/Desktop/linux_driver_lab/lab8/crypt_driver.o /home/vancongng/Desktop/linux_driver_lab/lab8/crypt_driver.mod.o

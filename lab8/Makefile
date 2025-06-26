@@ -1,48 +1,30 @@
-# Tên module và chương trình
-obj-m += crypt_driver.o
-USER_APP = main
-DEVICE = cryptdev
+# Tên module
+obj-m := crypt_driver.o
 
-# Thư mục kernel
+# Tên file thực thi user-space
+USER_APP := main
+
+# Đường dẫn kernel headers
 KDIR := /lib/modules/$(shell uname -r)/build
+
+# Thư mục hiện tại
 PWD := $(shell pwd)
 
-# ⚙️ Mặc định: build cả driver và user app
-all: modules $(USER_APP)
+all: $(USER_APP) kernel
 
-# Build chương trình người dùng
+# Biên dịch chương trình người dùng
 $(USER_APP): main.c
-	gcc -o $(USER_APP) main.c
+	$(CC) -o $@ $<
 
-# Build kernel module
-modules:
-	make -C $(KDIR) M=$(PWD) modules
+# Biên dịch kernel module
+kernel:
+	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
-# Nạp module + tạo /dev + phân quyền
-load: modules
-	@echo "🚀 Loading kernel module..."
-	-sudo insmod crypt_driver.ko || echo "⚠️  Có thể module đã được nạp"
-	@if [ ! -e /dev/$(DEVICE) ]; then \
-		sudo mknod /dev/$(DEVICE) c $$(grep $(DEVICE) /proc/devices | awk '{print $$1}') 0; \
-		echo "📦 Đã tạo /dev/$(DEVICE)"; \
-	fi
-	sudo chmod 666 /dev/$(DEVICE)
-	dmesg | tail -10
-
-# Gỡ module + xóa /dev
-unload:
-	@echo "🧹 Removing kernel module..."
-	-sudo rmmod crypt_driver
-	-sudo rm -f /dev/$(DEVICE)
-
-# Chạy chương trình người dùng với sudo
-run: load
-	sudo ./$(USER_APP)
-
-# Dọn sạch tất cả file sinh ra
 clean:
-	@echo "🧼 Đang dọn sạch..."
-	make -C $(KDIR) M=$(PWD) clean
-	-sudo rm -f $(USER_APP)
-	rm -f *.o *.ko *.mod.* *.symvers *.order Module.*
-	-sudo rm -f /dev/$(DEVICE)
+	$(MAKE) -C $(KDIR) M=$(PWD) clean
+	$(RM) -f $(USER_APP)
+
+run: all
+	sudo insmod crypt_driver.ko || true
+	sudo mknod -m 666 /dev/cryptdev c $(shell grep cryptdev /proc/devices | awk '{print $$1}') 0 || true
+	sudo ./main

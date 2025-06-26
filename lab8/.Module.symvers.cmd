@@ -1,1 +1,0 @@
-savedcmd_/home/vancongng/Desktop/linux_driver_lab/lab8/Module.symvers :=  scripts/mod/modpost -M -m -a      -o /home/vancongng/Desktop/linux_driver_lab/lab8/Module.symvers -T /home/vancongng/Desktop/linux_driver_lab/lab8/modules.order -i Module.symvers -e 
